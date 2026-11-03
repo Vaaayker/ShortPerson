@@ -1,0 +1,43 @@
+# ===== Unreal Engine 5 =====
+# Усе, що рушій/IDE генерують заново, — не комітимо.
+
+# Згенеровані рушієм
+Binaries/
+Intermediate/
+DerivedDataCache/
+Saved/
+
+# Те саме всередині плагінів проєкту
+Plugins/**/Binaries/
+Plugins/**/Intermediate/
+
+# Файли рішення IDE (генеруються через "Generate Project Files")
+*.sln
+*.slnx
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+*.user
+.vs/
+.vscode/
+.idea/
+*.code-workspace
+
+# Скомпільовані артефакти (на випадок, якщо опиняться поза Binaries/)
+*.pdb
+*.dll
+*.exe
+*.lib
+*.exp
+*.ilk
+*.so
+*.dylib
+*.target
+*.modules
+
+# Системне сміття
+.DS_Store
+Thumbs.db
+Desktop.ini
