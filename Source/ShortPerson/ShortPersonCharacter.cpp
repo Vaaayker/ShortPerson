@@ -11,6 +11,8 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "ShortPerson.h"
+#include "SPHealthComponent.h"
+#include "ShortPersonGameMode.h"
 
 AShortPersonCharacter::AShortPersonCharacter()
 {
@@ -48,6 +50,8 @@ AShortPersonCharacter::AShortPersonCharacter()
 
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
+
+	HealthComponent = CreateDefaultSubobject<USPHealthComponent>(TEXT("HealthComponent"));
 }
 
 void AShortPersonCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -130,4 +134,26 @@ void AShortPersonCharacter::DoJumpEnd()
 {
 	// signal the character to stop jumping
 	StopJumping();
+}
+
+void AShortPersonCharacter::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+
+	if (HealthComponent)
+	{
+		HealthComponent->OnDeath.AddDynamic(this, &AShortPersonCharacter::HandleDeath);
+	}
+}
+
+void AShortPersonCharacter::HandleDeath(AActor* DeadActor)
+{
+	UE_LOG(LogTemp, Warning, TEXT("OnDeath: %s died"), *GetNameSafe(DeadActor));
+
+	if (!HasAuthority()) return;   // смерть обробляє тільки сервер
+
+	if (AShortPersonGameMode* GM = GetWorld()->GetAuthGameMode<AShortPersonGameMode>())
+	{
+		GM->OnPlayerDied(GetController());
+	}
 }
