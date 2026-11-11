@@ -13,6 +13,7 @@ class UInputAction;
 struct FInputActionValue;
 class USPHealthComponent;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWeaponChanged, AWeaponBase*, NewWeapon);
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
 /**
@@ -105,5 +106,66 @@ protected:
 
 	UFUNCTION()
 	void HandleDeath(AActor* DeadActor);
+
+protected:
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Gameplay")
+	TObjectPtr<UInputAction> InteractAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Gameplay")
+	TObjectPtr<UInputAction> DashAction;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Interaction", meta = (ClampMin = "50", Units = "cm"))
+	float InteractRange = 250.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Interaction", meta = (ClampMin = "0.02", ClampMax = "1", Units = "s"))
+	float TraceInterval = 0.1f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Interaction|Debug")
+	bool bDrawDebugTrace = false;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Movement|Dash")
+	bool bCanDash = true;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Movement|Dash", meta = (EditCondition = "bCanDash", ClampMin = "0"))
+	float DashStrength = 1800.f;
+
+	virtual void BeginPlay() override; // якщо в шаблоні його немає
+
+private:
+	void TraceForInteractable();
+	void Interact();
+	void Dash();
+
+	FTimerHandle InteractTraceTimer;
+	TWeakObjectPtr<AActor> FocusedActor;
+
+	public:
+		UPROPERTY(BlueprintAssignable, Category = "Weapon")
+		FOnWeaponChanged OnWeaponChanged;
+
+		UFUNCTION(BlueprintPure, Category = "Weapon")
+		AWeaponBase* GetCurrentWeapon() const { return CurrentWeapon; }
+
+protected:
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Gameplay") TObjectPtr<UInputAction> FireAction;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Gameplay") TObjectPtr<UInputAction> ReloadAction;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Gameplay") TObjectPtr<UInputAction> NextWeaponAction;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	TArray<TSubclassOf<AWeaponBase>> StartingWeapons;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	FName WeaponSocket = TEXT("hand_r");
+
+private:
+	void StartFire();
+	void StopFire();
+	void Reload();
+	void NextWeapon();
+	void EquipWeapon(int32 Index);
+
+	UPROPERTY() TArray<TObjectPtr<AWeaponBase>> Weapons;
+	UPROPERTY() TObjectPtr<AWeaponBase> CurrentWeapon;
+	int32 CurrentWeaponIndex = INDEX_NONE;
 };
 

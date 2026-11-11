@@ -13,6 +13,10 @@
 #include "ShortPerson.h"
 #include "SPHealthComponent.h"
 #include "ShortPersonGameMode.h"
+#include "Interactable.h"
+#include "DrawDebugHelpers.h"
+#include "WeaponBase.h"
+
 
 AShortPersonCharacter::AShortPersonCharacter()
 {
@@ -69,6 +73,9 @@ void AShortPersonCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 
 		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AShortPersonCharacter::Look);
+	
+		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Triggered, this, &AShortPersonCharacter::Interact);
+		EnhancedInputComponent->BindAction(DashAction, ETriggerEvent::Triggered, this, &AShortPersonCharacter::Dash);
 	}
 	else
 	{
@@ -157,3 +164,87 @@ void AShortPersonCharacter::HandleDeath(AActor* DeadActor)
 		GM->OnPlayerDied(GetController());
 	}
 }
+
+void AShortPersonCharacter::BeginPlay()
+{
+	Super::BeginPlay(); // тут відпрацює BP Event BeginPlay
+	GetWorldTimerManager().SetTimer(InteractTraceTimer, this,
+		&AShortPersonCharacter::TraceForInteractable, TraceInterval, true);
+
+	FActorSpawnParameters P;
+	P.Owner = this;
+	P.Instigator = this;
+	for (const TSubclassOf<AWeaponBase>& WeaponClass : StartingWeapons)
+	{
+		if (!WeaponClass) continue;
+		AWeaponBase* W = GetWorld()->SpawnActor<AWeaponBase>(WeaponClass, GetActorTransform(), P);
+		W->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, WeaponSocket);
+		W->SetActorHiddenInGame(true);
+		Weapons.Add(W);
+	}
+	if (Weapons.Num() > 0) EquipWeapon(0);
+}
+
+void AShortPersonCharacter::TraceForInteractable()
+{
+	const FVector Start = FollowCamera->GetComponentLocation();
+	const FVector End = Start + FollowCamera->GetForwardVector() * (CameraBoom->TargetArmLength + InteractRange);
+
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(InteractTrace), false, this);
+	FHitResult Hit;
+	AActor* NewFocus = nullptr;
+
+	if (GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params))
+	{
+		AActor* HitActor = Hit.GetActor();
+		if (HitActor && HitActor->Implements<UInteractable>()
+			&& FVector::Dist(GetActorLocation(), Hit.ImpactPoint) <= InteractRange)
+		{
+			NewFocus = HitActor;
+		}
+	}
+
+	if (bDrawDebugTrace)
+		DrawDebugLine(GetWorld(), Start, End, NewFocus ? FColor::Green : FColor::Red, false, TraceInterval);
+
+	FocusedActor = NewFocus;
+	if (NewFocus && GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(1, TraceInterval + 0.05f, FColor::Yellow,
+			IInteractable::Execute_GetInteractionText(NewFocus).ToString());
+	}
+}
+
+void AShortPersonCharacter::Interact()
+{
+	if (AActor* Target = FocusedActor.Get())
+		IInteractable::Execute_Interact(Target, this);
+}
+
+void AShortPersonCharacter::Dash()
+{
+	if (!bCanDash) return;
+	FVector Dir = GetLastMovementInputVector().GetSafeNormal2D();
+	if (Dir.IsNearlyZero()) Dir = GetActorForwardVector();
+	LaunchCharacter(Dir * DashStrength + FVector(0, 0, 100), true, false);
+}
+
+void AShortPersonCharacter::EquipWeapon(int32 Index)
+{
+	if (!Weapons.IsValidIndex(Index)) return;
+	if (CurrentWeapon)
+	{
+		CurrentWeapon->StopFire();
+		CurrentWeapon->SetActorHiddenInGame(true);
+	}
+	CurrentWeaponIndex = Index;
+	CurrentWeapon = Weapons[Index];
+	CurrentWeapon->SetActorHiddenInGame(false);
+	OnWeaponChanged.Broadcast(CurrentWeapon);
+}
+
+void AShortPersonCharacter::NextWeapon() { if (Weapons.Num() > 1) EquipWeapon((CurrentWeaponIndex + 1) % Weapons.Num()); }
+void AShortPersonCharacter::StartFire() { if (CurrentWeapon) CurrentWeapon->StartFire(); }
+void AShortPersonCharacter::StopFire() { if (CurrentWeapon) CurrentWeapon->StopFire(); }
+void AShortPersonCharacter::Reload() { if (CurrentWeapon) CurrentWeapon->Reload(); }
+
